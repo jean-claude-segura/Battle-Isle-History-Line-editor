@@ -1,85 +1,12 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 // XOR70.cpp : Ce fichier contient la fonction 'main'. L'exécution du programme commence et se termine à cet endroit.
-#include <iostream>
-#include <fstream>
-#include <vector>
+//
 
-
-static int XOR70(char* Input_Buffer, unsigned long packed_size, char* Output_Buffer)
-{
-	auto tempin = Input_Buffer;
-	auto tempout = Output_Buffer;
-	const char sep_pattern[] = { 0x02, 0x01, 0x01, 0x00, 0x00 };
-	const char sep_pattern_multi[] = { 0x02, 0x02, 0x01, 0x00, 0x00 };
-	const char sep_pattern_split[] = { 0x02, 0x01, 0x00, 0x01, 0x00 };
-	const char sep_pattern_split_end[] = { 0x02, 0x02, 0x00, 0x00, 0x00 };
-	for (unsigned long i = 0; i < packed_size; ++i, ++tempin, ++tempout)
-	{
-		if (strncmp(tempin, sep_pattern, 5) == 0)
-		{
-			strncpy(tempout, "[1]\r\n", 5);
-			i += 4;
-			tempin += 4;
-			tempout += 4;
-		}
-		else if (strncmp(tempin, sep_pattern_multi, 5) == 0)
-		{
-			strncpy(tempout, "[2]\r\n", 5);
-			i += 4;
-			tempin += 4;
-			tempout += 4;
-		}
-		else if (strncmp(tempin, sep_pattern_split, 5) == 0)
-		{
-			strncpy(tempout, "[3]\r\n", 5);
-			i += 4;
-			tempin += 4;
-			tempout += 4;
-		}
-		else if (strncmp(tempin, sep_pattern_split_end, 5) == 0)
-		{
-			strncpy(tempout, "[4]\r\n", 5);
-			i += 4;
-			tempin += 4;
-			tempout += 4;
-		}
-		else
-			*tempout = *tempin ^ 0x70;
-	}
-
-	return 0; // Succès
-}
+#include "XOR70.hpp"
 
 int main(int argc, char* argv[])
 {
 	if (argc == 2)
-	{
-		std::fstream fsin, fsout;
-		fsin.open(argv[1], std::fstream::in | std::fstream::binary);
-		// Lis tout le fichier dans un vecteur
-		std::vector<char> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
-
-		std::string outputfilename(argv[1]);
-		outputfilename += ".x70";
-		fsout.open(outputfilename, std::fstream::out | std::fstream::trunc | std::fstream::binary);
-
-		const auto unpacked_size = input_buffer.size();
-
-		auto output_buffer = std::make_unique<char[]>(unpacked_size);
-		std::memset(output_buffer.get(), 0, unpacked_size);
-
-		const auto ret = XOR70(input_buffer.data(), unpacked_size, output_buffer.get());
-
-		if (ret != -1)
-		{
-			fsout.write(output_buffer.get(), unpacked_size);
-			fsout.flush();
-		}
-		fsout.close();
-
-		fsin.close();
-	}
+		XOR70File(argv[1]);
 }
 
 // Exécuter le programme : Ctrl+F5 ou menu Déboguer > Exécuter sans débogage
