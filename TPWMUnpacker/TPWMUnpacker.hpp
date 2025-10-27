@@ -107,11 +107,11 @@ static int Unpack_TPWMFile(const std::string strFileName, const std::string strE
             {
                 char filesize[4];
                 fsin.read(filesize, 4);
-                // Lis tout le fichier dans un vecteur
-                std::vector<uint_fast8_t> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
-
                 // This ID string is followed by four bytes, which is the size of the unpacked data...
                 unsigned long unpacked_size = read_le_uint32(filesize);
+
+                // Lis tout le fichier dans un vecteur
+                std::vector<uint_fast8_t> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
 
                 auto output_buffer = std::make_unique<uint_fast8_t[]>(unpacked_size);
                 std::memset(output_buffer.get(), 0, unpacked_size);
