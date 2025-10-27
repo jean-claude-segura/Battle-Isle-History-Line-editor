@@ -78,7 +78,7 @@ static int Unpack_TPWM(uint_fast8_t* Input_Buffer, unsigned long packed_size, ui
 }
 
 // Utilitaire pour lire un entier 32 bits little-endian à partir d’un buffer
-static unsigned long read_le_uint32(const uint_fast8_t* buf) {
+static unsigned long read_le_uint32(const char* buf) {
     return ((unsigned char)buf[0]) |
         ((unsigned char)buf[1] << 8) |
         ((unsigned char)buf[2] << 16) |
@@ -93,11 +93,11 @@ static int Unpack_TPWMFile(const std::string strFileName, const std::string strE
 
     if (fsin.is_open())
     {
-        // Lis tout le fichier dans un vecteur
-        std::vector<uint_fast8_t> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
+        char header[4];
+        fsin.read(header, 4);
 
         // Files compressed with this packer can be easily recognized by an ID string "TPWM" directly at the beginning of the file.
-        if (strncmp((char*)input_buffer.data(), "TPWM", 4) == 0)
+        if (strncmp(header, "TPWM", 4) == 0)
         {
             std::string outputfilename(strFileName);
             outputfilename += strExt;
@@ -105,17 +105,23 @@ static int Unpack_TPWMFile(const std::string strFileName, const std::string strE
 
             if (fsout.is_open())
             {
+                char filesize[4];
+                fsin.read(filesize, 4);
+                // Lis tout le fichier dans un vecteur
+                std::vector<uint_fast8_t> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
+
                 // This ID string is followed by four bytes, which is the size of the unpacked data...
-                unsigned long unpacked_size = read_le_uint32(input_buffer.data() + 4);
+                unsigned long unpacked_size = read_le_uint32(filesize);
 
                 auto output_buffer = std::make_unique<uint_fast8_t[]>(unpacked_size);
                 std::memset(output_buffer.get(), 0, unpacked_size);
 
                 // The size of the packed data thus results from the file size - 8
-                const auto packed_size = input_buffer.size() - 8;
+                // *BUT* we're starting after the header because we read it before from the stream...
+                const auto packed_size = input_buffer.size() /* -8 */;
 
                 // ... and then the packed data itself.
-                ret = Unpack_TPWM(input_buffer.data() + 8, packed_size, output_buffer.get(), unpacked_size);
+                ret = Unpack_TPWM(input_buffer.data() /* + 8 */, packed_size, output_buffer.get(), unpacked_size);
 
                 if (ret != -1)
                 {
