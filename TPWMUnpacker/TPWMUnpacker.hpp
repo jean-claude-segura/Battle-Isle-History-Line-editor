@@ -16,7 +16,7 @@ the packer inserts an extra byte whose bits for the next 8 bytes indicate whethe
 static int Unpack_TPWM(uint_fast8_t* Input_Buffer, unsigned long packed_size, uint_fast8_t* Output_Buffer, unsigned long unpacked_size)
 {
     uint_fast8_t b1, b2;
-    unsigned short packbyte;
+    uint_fast8_t packbyte;
     int bit, i;
     unsigned long input_offset = 0;
     unsigned long output_offset = 0;
@@ -25,7 +25,7 @@ static int Unpack_TPWM(uint_fast8_t* Input_Buffer, unsigned long packed_size, ui
     while ((input_offset < packed_size) && (output_offset < unpacked_size))
     {
         // Lire l'octet de contrôle (flag byte)
-        packbyte = (uint_fast8_t)Input_Buffer[input_offset++];
+        packbyte = Input_Buffer[input_offset++];
 
         for (bit = 0; bit < 8; bit++)
         {
@@ -38,8 +38,8 @@ static int Unpack_TPWM(uint_fast8_t* Input_Buffer, unsigned long packed_size, ui
                 if (input_offset + 1 >= packed_size)
                     return -1; // Pas assez de données pour lire b1 et b2
 
-                b1 = (uint_fast8_t)Input_Buffer[input_offset++];
-                b2 = (uint_fast8_t)Input_Buffer[input_offset++];
+                b1 = Input_Buffer[input_offset++];
+                b2 = Input_Buffer[input_offset++];
 
                 // Longueur = (b1 & 0x0F) + 2
                 length = (b1 & 0x0F) + 2;
