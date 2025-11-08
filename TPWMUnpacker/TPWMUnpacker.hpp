@@ -142,3 +142,106 @@ static int Unpack_TPWMFile(const std::string strFileName, const std::string strE
 
     return ret;
 }
+
+static int Unpack_TPWMStream(std::istream& fsin, std::ostream& fsout)
+{
+    int ret = -1;
+
+    char header[4];
+    fsin.read(header, 4);
+
+    // Files compressed with this packer can be easily recognized by an ID string "TPWM" directly at the beginning of the file.
+    if (strncmp(header, "TPWM", 4) == 0)
+    {
+        char filesize[4];
+        fsin.read(filesize, 4);
+        // This ID string is followed by four bytes, which is the size of the unpacked data...
+        const unsigned long unpacked_size = read_le_uint32(filesize);
+
+        // Lis tout le fichier dans un vecteur
+        std::vector<uint_fast8_t> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
+
+        // The size of the packed data thus results from the file size - 8
+        // *BUT* we're starting after the header because we read it before from the stream...
+        const auto packed_size = input_buffer.size() /* -8 */;
+
+        auto output_buffer = std::make_unique<uint_fast8_t[]>(unpacked_size);
+        std::memset(output_buffer.get(), 0, unpacked_size);
+
+        ret = Unpack_TPWM(input_buffer.data(), packed_size, output_buffer.get(), unpacked_size);
+
+        fsout.write(reinterpret_cast<char*>(output_buffer.get()), unpacked_size);
+    }
+
+    return ret;
+}
+
+static int Unpack_TPWMStream(std::istream& fsin, std::shared_ptr<uint_fast8_t[]>& output_buffer, unsigned long& unpacked_size)
+{
+    int ret = -1;
+
+    char header[4];
+    fsin.read(header, 4);
+
+    // Files compressed with this packer can be easily recognized by an ID string "TPWM" directly at the beginning of the file.
+    if (strncmp(header, "TPWM", 4) == 0)
+    {
+        char filesize[4];
+        fsin.read(filesize, 4);
+        // This ID string is followed by four bytes, which is the size of the unpacked data...
+        unpacked_size = read_le_uint32(filesize);
+
+        // Lis tout le fichier dans un vecteur
+        std::vector<uint_fast8_t> input_buffer((std::istreambuf_iterator<char>(fsin)), std::istreambuf_iterator<char>());
+
+        // The size of the packed data thus results from the file size - 8
+        // *BUT* we're starting after the header because we read it before from the stream...
+        const auto packed_size = input_buffer.size() /* -8 */;
+
+        /*auto*/ output_buffer = std::make_shared<uint_fast8_t[]>(unpacked_size);
+        std::memset(output_buffer.get(), 0, unpacked_size);
+
+        ret = Unpack_TPWM(input_buffer.data(), packed_size, output_buffer.get(), unpacked_size);
+    }
+
+    return ret;
+}
+
+static int Unpack_TPWMFileLight(const std::string strFileName, const std::string strExt = ".out")
+{
+    int ret = -1;
+    std::ifstream fsin;
+    fsin.open(strFileName, /*std::fstream::in |*/ std::fstream::binary);
+
+    if (fsin.is_open())
+    {
+        {
+            std::string outputfilename(strFileName);
+            outputfilename += strExt;
+
+            std::ofstream fsout;
+
+            fsout.open(outputfilename, /*std::fstream::out |*/ std::fstream::trunc | std::fstream::binary);
+
+            if (fsout.is_open())
+            {
+                ret = Unpack_TPWMStream(fsin, fsout);
+
+                if (ret != -1)
+                {
+                    fsout.flush();
+                    fsout.close();
+                }
+                else
+                {
+                    // Should delete the file here.
+                    fsout.close();
+                }
+            }
+        }
+    }
+
+    fsin.close();
+
+    return ret;
+}
