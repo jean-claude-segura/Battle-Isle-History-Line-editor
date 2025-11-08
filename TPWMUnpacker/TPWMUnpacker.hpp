@@ -245,3 +245,134 @@ static int Unpack_TPWMFileLight(const std::string strFileName, const std::string
 
     return ret;
 }
+
+/*
+Le décompresseur lit séquentiellement :
+1 octet de contrôle (packbyte)
+puis, pour chacun des 8 bits :
+soit une donnée brute (bit = 0) ? 1 octet à lire du flux
+soit une séquence compressée (bit = 1) ? 2 octets à lire (b1, b2), puis recopier depuis le tampon de sortie précédent.
+Comme les séquences compressées référencent des données déjà décompressées, on a besoin d’un tampon circulaire (sliding window) pour pouvoir relire les derniers octets déjà produits sans tout garder.
+buffer circulaire de 0x1000 octets (4096, soit la fenêtre maximale de distance).
+*/
+static int Unpack_TPWMStreamed(std::istream& in, std::ostream& out)
+{
+    int ret = -1;
+
+    char header[4];
+    in.read(header, 4);
+    if (strncmp(header, "TPWM", 4) == 0)
+    {
+        char filesize[4];
+        in.read(filesize, 4);
+        const unsigned long unpacked_size = read_le_uint32(filesize);
+
+        const size_t WINDOW_SIZE = 0x1000; // distance max = 0xFFF
+        std::vector<uint8_t> window(WINDOW_SIZE, 0);
+        size_t window_pos = 0; // position courante dans la fenêtre circulaire
+
+        unsigned long output_count = 0;
+
+        while (output_count < unpacked_size && in.good())
+        {
+            int packbyte = in.get();
+            if (packbyte == EOF)
+                return -1;
+
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                if (output_count >= unpacked_size)
+                    break;
+
+                if (packbyte & 0x80)
+                {
+                    int b1 = in.get();
+                    int b2 = in.get();
+                    if (b1 == EOF || b2 == EOF)
+                        return -1;
+
+                    unsigned int length = (b1 & 0x0F) + 2;
+                    unsigned int distance = b2 | ((b1 & 0xF0) << 4);
+
+                    // Vérifie les bornes
+                    if (distance == 0 || distance > WINDOW_SIZE)
+                        return -1;
+
+                    for (unsigned int i = 0; i <= length; ++i)
+                    {
+                        uint8_t val = window[(window_pos - distance) & (WINDOW_SIZE - 1)];
+                        out.put(static_cast<char>(val));
+                        if (!out.good())
+                            return -1;
+
+                        window[window_pos] = val;
+                        window_pos = (window_pos + 1) & (WINDOW_SIZE - 1);
+
+                        if (++output_count >= unpacked_size)
+                            break;
+                    }
+                }
+                else
+                {
+                    int data = in.get();
+                    if (data == EOF)
+                        return -1;
+
+                    out.put(static_cast<char>(data));
+                    if (!out.good())
+                        return -1;
+
+                    window[window_pos] = static_cast<uint8_t>(data);
+                    window_pos = (window_pos + 1) & (WINDOW_SIZE - 1);
+
+                    ++output_count;
+                }
+
+                packbyte <<= 1;
+            }
+        }
+
+        ret = (output_count == unpacked_size) ? 0 : -1;
+    }
+
+    return ret;
+}
+
+static int Unpack_TPWMFileStreamed(const std::string strFileName, const std::string strExt = ".out")
+{
+    int ret = -1;
+    std::ifstream fsin;
+    fsin.open(strFileName, /*std::fstream::in |*/ std::fstream::binary);
+
+    if (fsin.is_open())
+    {
+        {
+            std::string outputfilename(strFileName);
+            outputfilename += strExt;
+
+            std::ofstream fsout;
+
+            fsout.open(outputfilename, /*std::fstream::out |*/ std::fstream::trunc | std::fstream::binary);
+
+            if (fsout.is_open())
+            {
+                ret = Unpack_TPWMStreamed(fsin, fsout);
+
+                if (ret != -1)
+                {
+                    fsout.flush();
+                    fsout.close();
+                }
+                else
+                {
+                    // Should delete the file here.
+                    fsout.close();
+                }
+            }
+        }
+    }
+
+    fsin.close();
+
+    return ret;
+}
